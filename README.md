@@ -1,16 +1,20 @@
 # Project Strike Asset Uploader
 
-**Current web version: V12**
+**Current web version: V11**
 
 Project Strike Asset Uploader is the model-ingestion and conversion front end for the browser FPS project **Project Strike**.
 
-It is designed to take raw art packages from asset sites or Blender and organize them into the Project Strike game repository without manually rebuilding every folder.
+V11 is now the permanent production HTML entry. Future improvements should update `model-processor-v11.html` in place instead of creating `v12`, `v13`, or other duplicate HTML files. This keeps GitHub Pages, bookmarks, Safari caching, and debugging pointed at one source of truth.
 
 ## Web app
 
 GitHub Pages:
 
 `https://matthewcodergamer.github.io/Weapon-model-/`
+
+The Pages root redirects to:
+
+`model-processor-v11.html`
 
 ## What it accepts
 
@@ -111,9 +115,9 @@ The organizer recognizes common names for:
 - Specular
 - Preview / reference images
 
-## V12 update
+## V11 production policy
 
-V12 documents and completes the Blender-to-GLB handoff between `Weapon-model-` and `Fps-game-`. The FPS conversion workflow now waits for package uploads to settle, cancels stale conversion runs, refreshes to the latest package state, repairs texture paths, validates output, emits conversion reports, and commits the finished runtime GLB back into the game repository.
+V11 is the stable filename and production entry. New functionality is committed directly into `model-processor-v11.html`; the filename does not change just because the implementation improves. The FPS conversion workflow remains independently upgradeable in `Fps-game-` without requiring a new uploader HTML version.
 
 ## Related repository
 
