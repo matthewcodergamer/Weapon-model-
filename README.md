@@ -124,3 +124,7 @@ V11 is the stable filename and production entry. New functionality is committed 
 Project Strike game:
 
 `https://github.com/matthewcodergamer/Fps-game-`
+
+## V11 hardened upload pipeline
+
+V11 keeps heavy FBX/BLEND and large-GLB conversion off iPhone Safari. Small GLBs can upload directly; other assets are staged in 4 MiB chunks with package textures and a single batch marker. The FPS repository reconstructs, converts, optimizes, validates, and commits runtime GLBs through GitHub Actions. Browser preview is capped for very large models to prevent iOS memory reloads.
