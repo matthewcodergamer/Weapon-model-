@@ -9,19 +9,33 @@
     const u = typeof input === 'string' ? input : (input && input.url) || '';
     return /^https:\/\/api\.github\.com\//i.test(u);
   };
+  const tokenField = () => document.querySelector('#token');
   const readLiveToken = () => {
-    const el = document.querySelector('#token');
+    const el = tokenField();
     return el && typeof el.value === 'string' ? el.value.trim() : '';
   };
-  const buildInit = (input, init = {}, forceLiveToken = false) => {
-    const headers = new Headers((input instanceof Request ? input.headers : undefined) || init.headers || {});
-    const liveToken = readLiveToken();
-    if (liveToken && (forceLiveToken || !headers.has('Authorization'))) {
-      headers.set('Authorization', `Bearer ${liveToken}`);
+  const writeLiveToken = token => {
+    const el = tokenField();
+    if (el) {
+      el.value = String(token || '').trim();
+      el.dispatchEvent(new Event('input', {bubbles:true}));
+      el.dispatchEvent(new Event('change', {bubbles:true}));
     }
+  };
+  const authHeaders = (input, init = {}, forceToken = '') => {
+    const headers = new Headers((input instanceof Request ? input.headers : undefined) || init.headers || {});
+    const token = String(forceToken || readLiveToken()).trim();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
     headers.set('Accept', headers.get('Accept') || 'application/vnd.github+json');
     headers.set('X-GitHub-Api-Version', headers.get('X-GitHub-Api-Version') || '2022-11-28');
     return {...init, headers};
+  };
+  const explain401 = () => {
+    const status = document.querySelector('#status');
+    if (status) {
+      status.className = 'status bad';
+      status.textContent = 'GitHub rejected the current token (401). Paste a fresh fine-grained token with Contents: Read and write. The current upload will resume from the failed request instead of restarting.';
+    }
   };
 
   async function resilientFetch(input, init = {}) {
@@ -30,30 +44,42 @@
     const method = String(init.method || (input && input.method) || 'GET').toUpperCase();
     const maxAttempts = method === 'PUT' ? 7 : 5;
     let lastError;
-    let requestInit = buildInit(input, init, false);
-    let authRefreshUsed = false;
+    let requestInit = authHeaders(input, init);
+    let replacementPromptUsed = false;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         let response = await nativeFetch(input, requestInit);
 
-        if (response.status === 401 && !authRefreshUsed) {
-          const liveToken = readLiveToken();
-          if (liveToken) {
-            authRefreshUsed = true;
-            requestInit = buildInit(input, init, true);
-            console.warn('[Project Strike] GitHub returned 401; refreshing Authorization from the current token field and retrying once.');
-            await sleep(250);
-            response = await nativeFetch(input, requestInit);
+        if (response.status === 401) {
+          explain401();
+          console.error('[Project Strike] GitHub rejected the current credential with 401 Bad credentials.');
+
+          if (!replacementPromptUsed) {
+            replacementPromptUsed = true;
+            const current = readLiveToken();
+            let replacement = '';
+            try {
+              replacement = window.prompt(
+                'GitHub rejected the current token. Paste a fresh fine-grained GitHub token with Contents: Read and write to resume this exact upload request. Cancel to stop.',
+                ''
+              ) || '';
+            } catch {}
+            replacement = replacement.trim();
+
+            if (replacement && replacement !== current) {
+              writeLiveToken(replacement);
+              requestInit = authHeaders(input, init, replacement);
+              console.warn('[Project Strike] New GitHub credential supplied; retrying the failed request without restarting the asset batch.');
+              await sleep(250);
+              response = await nativeFetch(input, requestInit);
+            }
           }
         }
 
-        if (response.status === 401) {
-          console.error('[Project Strike] GitHub authentication rejected. The token is invalid, expired, revoked, or does not have access to this repository.');
-          return response;
-        }
-
+        if (response.status === 401) return response;
         if (!transientStatus(response.status) || attempt === maxAttempts) return response;
+
         const retryAfter = Number(response.headers.get('retry-after')) || 0;
         await sleep(Math.max(retryAfter * 1000, Math.min(8000, 450 * (2 ** (attempt - 1)) + Math.random() * 300)));
       } catch (error) {
@@ -76,5 +102,5 @@
   }
 
   window.fetch = resilientFetch;
-  console.info('[Project Strike] resilient GitHub upload transport + live auth repair enabled');
+  console.info('[Project Strike] resilient GitHub transport enabled: live auth, 401 recovery, in-place resume, and transient retry support.');
 })();
