@@ -1,0 +1,47 @@
+name: Apply V11 hardening
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/patch_v11_hardening.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch and validate V11
+        run: |
+          python3 tools/patch_v11_hardening.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('model-processor-v11.html').read_text()
+          m=re.search(r'<script type="module">(.*?)</script>',s,re.S)
+          assert m, 'module script missing'
+          Path('/tmp/v11.mjs').write_text(m.group(1))
+          subprocess.run(['node','--check','/tmp/v11.mjs'],check=True)
+          assert 'project-strike-batches' in s
+          assert 'PREVIEW_LIMIT' in s
+          assert 'Repository conversion ready' in s
+          print('V11 syntax and hardening assertions PASS')
+          PY
+      - name: Commit hardened V11
+        run: |
+          git config user.name 'project-strike-v11-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add model-processor-v11.html README.md
+          if git diff --cached --quiet; then
+            echo 'No V11 changes required.'
+          else
+            git commit -m 'Harden V11 batch conversion and iPhone stability'
+            git pull --rebase origin main
+            git push origin main
+          fi
